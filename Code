@@ -2,7 +2,8 @@ import re
 from aiogram import Bot, Dispatcher, executor, types
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-BOT_TOKEN = "7901576662:AAGkkzJHgY9ROv0UzyZoARZyPKLJp2CjVlw"
+BOT_TOKEN = "Sorry, I cannot show my bot token, but you can insert your own bot token here by getting it from BotFather.
+"
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(bot)
