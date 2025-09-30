@@ -1,0 +1,106 @@
+import re
+from aiogram import Bot, Dispatcher, executor, types
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+BOT_TOKEN = "7901576662:AAGkkzJHgY9ROv0UzyZoARZyPKLJp2CjVlw"
+
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher(bot)
+
+# Планировщик задач
+scheduler = AsyncIOScheduler(timezone="Asia/Almaty")
+
+# Сохраняем напоминания (одно на чат для простоты)
+USER_JOBS = {}  # chat_id -> {"time": "HH:MM", "text": "..."}
+
+HELP_TEXT = (
+    "Привет! Я бот-напоминалка.\n\n"
+    "Команды:\n"
+    "• /remind HH:MM ТЕКСТ — ежедневное напоминание в указанное время\n"
+    "   Пример: /remind 09:30 Выпить воду\n"
+    "• /list — показать активное напоминание\n"
+    "• /stop — удалить напоминание\n"
+    "Часовой пояс: Asia/Almaty"
+)
+
+def parse_hhmm(s: str):
+    """Парсим строку HH:MM и возвращаем (hour, minute) или None"""
+    m = re.fullmatch(r"(\d{1,2}):(\d{2})", s.strip())
+    if not m:
+        return None
+    h, mnt = int(m.group(1)), int(m.group(2))
+    if 0 <= h < 24 and 0 <= mnt < 60:
+        return h, mnt
+    return None
+
+async def send_reminder(chat_id: int, text: str):
+    """Отправка напоминания"""
+    await bot.send_message(chat_id, f"🔔 Напоминание: {text}")
+
+@dp.message_handler(commands=["start", "help"])
+async def cmd_start(message: types.Message):
+    await message.answer(HELP_TEXT)
+
+@dp.message_handler(commands=["remind"])
+async def cmd_remind(message: types.Message):
+    args = message.get_args()
+    if not args:
+        return await message.answer("Формат: /remind HH:MM ТЕКСТ\nПример: /remind 21:15 Принять витамины")
+
+    parts = args.split(maxsplit=1)
+    if len(parts) < 2:
+        return await message.answer("Нужно указать и время, и текст. Пример: /remind 08:00 Выпить воду")
+
+    time_str, text = parts[0], parts[1].strip()
+    parsed = parse_hhmm(time_str)
+    if not parsed:
+        return await message.answer("Неверный формат времени. Используй HH:MM (например: 09:05).")
+
+    hour, minute = parsed
+    chat_id = message.chat.id
+    job_id = f"reminder_{chat_id}"
+
+    # Удаляем старое напоминание, если было
+    old_job = scheduler.get_job(job_id)
+    if old_job:
+        old_job.remove()
+
+    # Создаём новое ежедневное напоминание
+    scheduler.add_job(
+        send_reminder,
+        "cron",
+        hour=hour,
+        minute=minute,
+        args=[chat_id, text],
+        id=job_id,
+        replace_existing=True,
+    )
+
+    USER_JOBS[chat_id] = {"time": f"{hour:02d}:{minute:02d}", "text": text}
+    await message.answer(f"✅ Готово! Буду напоминать каждый день в {hour:02d}:{minute:02d} — «{text}».")
+
+@dp.message_handler(commands=["list"])
+async def cmd_list(message: types.Message):
+    info = USER_JOBS.get(message.chat.id)
+    if not info:
+        return await message.answer("Пока нет активных напоминаний. Добавь: /remind HH:MM ТЕКСТ")
+    await message.answer(f"Активное напоминание: {info['time']} — «{info['text']}»")
+
+@dp.message_handler(commands=["stop"])
+async def cmd_stop(message: types.Message):
+    chat_id = message.chat.id
+    job_id = f"reminder_{chat_id}"
+
+    job = scheduler.get_job(job_id)
+    if job:
+        job.remove()
+    USER_JOBS.pop(chat_id, None)
+
+    await message.answer("🛑 Напоминание удалено.")
+
+# Запуск планировщика вместе с ботом
+async def on_startup(_):
+    scheduler.start()
+
+if __name__ == "__main__":
+    executor.start_polling(dp, skip_updates=True, on_startup=on_startup)
