@@ -1,2 +1,5 @@
 # Telegram-Reminder-Bot
-Это мой второй проект что я создал с помощью python используя библиотеку aiogram(2.25.1 версия).Подобнее можно почитать в README.
+This is my second project created with Python using the aiogram library (version 2.25.1).  
+The idea of this bot is simple: when you run the /start command, it sends you a welcome message.  
+Then, by typing: /remind *Time* *What needs to be done*,  
+you can set a daily reminder with the specified text at the chosen time.
